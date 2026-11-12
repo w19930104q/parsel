@@ -1328,6 +1328,111 @@ into an XPath expression as a string, which you can use as-is or combine to
 build a more complex expression, before feeding to a function expecting XPath.
 
 
+Extracting repeated records
+===========================
+
+When a page contains repeated records (products, feed entries, search
+results...), extracting them usually means writing the same loops over and
+over: select the records, iterate, run one selector per field on each record,
+remember which fields may be missing or multi-valued, and join relative URLs
+yourself. :func:`~parsel.extract_records` does all of this in one call.
+
+A :class:`~parsel.Field` describes one business field. Give it a ``css`` or
+``xpath`` expression relative to a record, mark it ``required`` when it must
+be present, set ``multi`` to collect every hit instead of only the first one,
+and set ``url`` to normalize the values against the document base URL.
+``attr`` reads an attribute instead of the node text.
+
+::
+
+    >>> from parsel import Field, Selector, extract_records
+    >>> selector = Selector(text='''
+    ... <ul>
+    ...   <li>
+    ...     <a href="/product/1">First product</a>
+    ...     <span class="tag">red</span>
+    ...     <span class="tag">small</span>
+    ...   </li>
+    ...   <li>
+    ...     <a href="/product/2">Second product</a>
+    ...   </li>
+    ... </ul>''', base_url="https://shop.example.com/")
+    >>> result = extract_records(
+    ...     selector,
+    ...     record_css="li",
+    ...     fields={
+    ...         "name": Field(css="a::text", required=True),
+    ...         "link": Field(css="a", attr="href", url=True),
+    ...         "tags": Field(css="span.tag::text", multi=True),
+    ...     },
+    ... )
+    >>> result.record_count
+    2
+    >>> result.values
+    ({'name': 'First product', 'link': 'https://shop.example.com/product/1', 'tags': ['red', 'small']},
+     {'name': 'Second product', 'link': 'https://shop.example.com/product/2', 'tags': []})
+
+Optional single-valued fields return ``None`` when nothing matches, while
+optional multi-valued fields return an empty list. Absolute URLs are kept
+unchanged and relative ones are joined with the base URL, which can also come
+from an HTML ``<base>`` tag or the ``base_url`` argument of
+:func:`~parsel.extract_records`.
+
+The result also reports per-field diagnostics, so callers do not have to
+guess whether a field was missing or matched several times:
+
+::
+
+    >>> result.field_diagnostics["tags"].total_hits
+    2
+    >>> result.field_diagnostics["tags"].hit_records
+    (0,)
+    >>> result.field_diagnostics["tags"].missing_records
+    (1,)
+
+A missing required field never passes silently:
+:class:`~parsel.RecordExtractionError` is raised, but it keeps the full result,
+including the values that were found:
+
+::
+
+    >>> from parsel import RecordExtractionError
+    >>> try:
+    ...     extract_records(
+    ...         selector,
+    ...         record_css="li",
+    ...         fields={"price": Field(css="span.price::text", required=True)},
+    ...     )
+    ... except RecordExtractionError as error:
+    ...     error.missing
+    ((0, 'price'), (1, 'price'))
+
+For XML documents with a default namespace (``xmlns="..."``), the default
+namespace is registered automatically under the ``d`` prefix, which works in
+both XPath and CSS (``d|entry``) expressions:
+
+::
+
+    >>> xml_selector = Selector(text='''<?xml version="1.0"?>
+    ... <feed xmlns="http://www.w3.org/2005/Atom">
+    ...   <entry><title>One</title></entry>
+    ...   <entry><title>Two</title></entry>
+    ... </feed>''', type="xml")
+    >>> xml_result = extract_records(
+    ...     xml_selector,
+    ...     record_xpath="//d:entry",
+    ...     fields={"title": Field(xpath="./d:title/text()", required=True)},
+    ... )
+    >>> [record["title"] for record in xml_result.values]
+    ['One', 'Two']
+
+Invalid XPath and CSS expressions raise the same exceptions as
+:meth:`~parsel.selector.Selector.xpath` and :meth:`~parsel.selector.Selector.css`,
+and the existing selector API is unchanged. The same functionality is also
+available as the :meth:`~parsel.selector.Selector.extract_records` method on a
+selector.
+
+
 Similar libraries
 =================
 

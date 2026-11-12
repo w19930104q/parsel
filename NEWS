@@ -3,6 +3,23 @@
 History
 -------
 
+Unreleased
+~~~~~~~~~~
+
+* Added one-call record extraction through the new
+  :mod:`parsel.records` module and the
+  :meth:`~parsel.selector.Selector.extract_records` selector method.
+  :func:`~parsel.extract_records` locates repeated records with a single
+  XPath or CSS selector, then extracts one :class:`~parsel.Field` per
+  business field from each record, with support for text and attribute
+  values, multi-valued fields, relative-URL normalization and the XML
+  default namespace (registered automatically under the ``d`` prefix).
+  The :class:`~parsel.ExtractionResult` exposes per-record values together
+  with per-field hit counts and other diagnostics, and missing required
+  fields raise :class:`~parsel.RecordExtractionError` without losing the
+  extracted data. The existing ``Selector`` and ``SelectorList`` API and
+  exception semantics are unchanged.
+
 1.12.1 (2026-09-28)
 ~~~~~~~~~~~~~~~~~~~
 

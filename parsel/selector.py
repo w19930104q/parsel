@@ -9,6 +9,7 @@ import re
 import typing
 import warnings
 from functools import lru_cache
+from importlib import import_module
 from io import BytesIO
 from typing import (
     TYPE_CHECKING,
@@ -30,6 +31,8 @@ from .utils import extract_regex, flatten, iflatten, shorten
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from re import Pattern
+
+    from .records import ExtractionResult, Field
 
 
 _SelectorType = TypeVar("_SelectorType", bound="Selector")
@@ -920,6 +923,40 @@ class Selector:
         non-standard namespaces. See :ref:`selector-examples-xml`.
         """
         self.namespaces[prefix] = uri
+
+    def extract_records(
+        self,
+        fields: Mapping[str, Field],
+        *,
+        record_xpath: str | None = None,
+        record_css: str | None = None,
+        base_url: str | None = None,
+        namespaces: Mapping[str, str] | None = None,
+    ) -> ExtractionResult:
+        """
+        Extract repeated records and their fields in a single call.
+
+        This is a convenience wrapper around
+        :func:`parsel.records.extract_records`: see its documentation for the
+        description of the arguments, the returned
+        :class:`~parsel.records.ExtractionResult` and the
+        :class:`~parsel.records.RecordExtractionError` raised when a required
+        field is missing.
+        """
+        # Loaded lazily to avoid a circular import: parsel.records references
+        # Selector under TYPE_CHECKING only and is imported by parsel.__init__.
+        extract_records = typing.cast(
+            "typing.Callable[..., ExtractionResult]",
+            import_module("parsel.records").extract_records,
+        )
+        return extract_records(
+            self,
+            fields,
+            record_xpath=record_xpath,
+            record_css=record_css,
+            base_url=base_url,
+            namespaces=namespaces,
+        )
 
     def remove_namespaces(self) -> None:
         """

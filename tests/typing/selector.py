@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from parsel import Selector
+from parsel import Field, Selector
 
 
 def correct() -> None:
@@ -16,6 +16,19 @@ def correct() -> None:
     xpath_values: list[str] = selector.xpath(
         "//somens:a/text()", namespaces={"somens": "http://scrapy.org"}
     ).extract()
+
+    result = selector.extract_records(
+        record_css="li",
+        fields={
+            "name": Field(css="a::text", required=True),
+            "links": Field(css="a", attr="href", url=True, multi=True),
+        },
+        base_url="https://example.org/",
+        namespaces={"somens": "http://scrapy.org"},
+    )
+    record_count: int = result.record_count
+    first_name: str | list[str] | None = result.records[0].get("name")
+    total_hits: int = result.field_diagnostics["links"].total_hits
 
     class MySelector(Selector):
         def my_own_func(self) -> int:
@@ -50,6 +63,15 @@ def incorrect() -> None:
 
     # Typo in the extract method name.
     selector.css("li").extact()  # type: ignore[attr-defined]
+
+    # Field expressions must be strings.
+    Field(xpath=5)  # type: ignore[arg-type]
+
+    # extract_records needs a Mapping of Field instances.
+    selector.extract_records(
+        record_css="li",
+        fields={"name": "a::text"},  # type: ignore[dict-item]
+    )
 
     class MySelector(Selector):
         def my_own_func(self) -> int:
